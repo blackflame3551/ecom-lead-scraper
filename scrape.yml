@@ -1,0 +1,35 @@
+name: Wix Lead Scraper
+
+on:
+  schedule:
+    # Runs daily at 06:00 UTC. Adjust as you like (cron syntax, in UTC).
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+    # Lets you trigger it manually from the Actions tab in GitHub, anytime.
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run pipeline
+        run: python pipeline.py --queries queries.txt --out output/leads.csv
+
+      - name: Upload leads CSV
+        uses: actions/upload-artifact@v4
+        with:
+          name: leads-${{ github.run_id }}
+          path: output/leads.csv
+          retention-days: 30
