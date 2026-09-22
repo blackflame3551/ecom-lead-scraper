@@ -23,6 +23,7 @@ USER_AGENT = (
 )
 HEADERS = {"User-Agent": USER_AGENT}
 SEARCH_URL = "https://html.duckduckgo.com/html/"
+BING_SEARCH_URL = "https://www.bing.com/search"
 TIMEOUT = 10
 
 # Skip results from these — not candidate stores, just noise.
@@ -46,6 +47,34 @@ def extract_real_url(href: str) -> str:
 def is_blocked(url: str) -> bool:
     netloc = urlparse(url).netloc.lower()
     return any(b in netloc for b in DOMAIN_BLOCKLIST)
+
+
+def search_bing(query: str, max_results: int = 30):
+    """Fallback search engine — tried when DuckDuckGo returns nothing."""
+    urls = []
+    try:
+        resp = requests.get(
+            BING_SEARCH_URL,
+            params={"q": query},
+            headers=HEADERS,
+            timeout=TIMEOUT,
+        )
+    except requests.RequestException as e:
+        print(f"  [bing error] query failed: {e}")
+        return urls
+
+    # Bing result links appear as <a href="..."> inside <h2> tags in organic results.
+    hrefs = re.findall(r'<h2><a[^>]+href="([^"]+)"', resp.text)
+    if not hrefs:
+        print(f"  [bing diag] status={resp.status_code} body_len={len(resp.text)}")
+
+    for href in hrefs:
+        if href.startswith("http") and not is_blocked(href) and "bing.com" not in href:
+            urls.append(href)
+        if len(urls) >= max_results:
+            break
+
+    return urls
 
 
 def search_duckduckgo(query: str, max_results: int = 30):
@@ -101,6 +130,10 @@ def run(queries, out_path, delay=2.0, max_per_query=30):
     for i, q in enumerate(queries, 1):
         print(f"[{i}/{len(queries)}] searching: {q}")
         results = search_duckduckgo(q, max_per_query)
+        if not results:
+            print("  -> 0 results from DuckDuckGo, trying Bing...")
+            time.sleep(1)
+            results = search_bing(q, max_per_query)
         print(f"  -> {len(results)} results")
         all_urls.extend(results)
         time.sleep(delay)
