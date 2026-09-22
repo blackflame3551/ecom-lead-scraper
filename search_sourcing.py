@@ -24,6 +24,7 @@ USER_AGENT = (
 HEADERS = {"User-Agent": USER_AGENT}
 SEARCH_URL = "https://html.duckduckgo.com/html/"
 BING_SEARCH_URL = "https://www.bing.com/search"
+GOOGLE_SEARCH_URL = "https://www.google.com/search"
 TIMEOUT = 10
 
 # Skip results from these — not candidate stores, just noise.
@@ -47,6 +48,41 @@ def extract_real_url(href: str) -> str:
 def is_blocked(url: str) -> bool:
     netloc = urlparse(url).netloc.lower()
     return any(b in netloc for b in DOMAIN_BLOCKLIST)
+
+
+def search_google(query: str, max_results: int = 30):
+    """Second fallback — tried when both DuckDuckGo and Bing return nothing.
+    Google blocks automated requests aggressively (often a CAPTCHA page),
+    so this is the least reliable of the three and may return 0 often."""
+    urls = []
+    try:
+        resp = requests.get(
+            GOOGLE_SEARCH_URL,
+            params={"q": query, "num": max_results},
+            headers=HEADERS,
+            timeout=TIMEOUT,
+        )
+    except requests.RequestException as e:
+        print(f"  [google error] query failed: {e}")
+        return urls
+
+    # Google wraps organic result links in /url?q=<real_url>&... redirects,
+    # and also has some direct href="https://..." links mixed with tracking links.
+    hrefs = re.findall(r'href="(?:/url\?q=)?(https?://[^"&]+)', resp.text)
+
+    if not hrefs:
+        print(f"  [google diag] status={resp.status_code} body_len={len(resp.text)}")
+        if "captcha" in resp.text.lower() or "unusual traffic" in resp.text.lower():
+            print("  [google diag] CAPTCHA/block page detected")
+
+    for href in hrefs:
+        if is_blocked(href) or "google.com" in href or "gstatic.com" in href:
+            continue
+        urls.append(href)
+        if len(urls) >= max_results:
+            break
+
+    return urls
 
 
 def search_bing(query: str, max_results: int = 30):
@@ -134,6 +170,10 @@ def run(queries, out_path, delay=2.0, max_per_query=30):
             print("  -> 0 results from DuckDuckGo, trying Bing...")
             time.sleep(1)
             results = search_bing(q, max_per_query)
+        if not results:
+            print("  -> 0 results from Bing, trying Google...")
+            time.sleep(1)
+            results = search_google(q, max_per_query)
         print(f"  -> {len(results)} results")
         all_urls.extend(results)
         time.sleep(delay)

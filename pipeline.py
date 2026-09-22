@@ -14,8 +14,10 @@ Usage:
 import csv
 import argparse
 import os
+from urllib.parse import urlparse
 
 from search_sourcing import run as run_search
+from builtwith_sourcing import source_platform as source_builtwith
 from detector import detect_platform
 from age_scorer import score_domain
 from contact_extractor import get_contacts
@@ -33,15 +35,31 @@ def main():
     parser.add_argument("--out", default="output/leads.csv")
     parser.add_argument("--platform", default="Wix",
                          help="Platform to filter for (Wix, Shopify, WooCommerce, WordPress, PrestaShop, BigCommerce)")
+    parser.add_argument("--no-builtwith", action="store_true",
+                         help="Skip BuiltWith's free list as an extra candidate source")
     args = parser.parse_args()
 
-    # Step 1: source candidate URLs
+    # Step 1: source candidate URLs — search engines + BuiltWith's free sample list
     queries = load_lines(args.queries)
     print(f"Sourcing candidates from {len(queries)} queries...")
     run_search(queries, args.candidates_out)
 
-    # Step 2: detect platform, keep only matches
     candidates = load_lines(args.candidates_out)
+
+    if not args.no_builtwith:
+        print(f"\nSourcing additional candidates from BuiltWith for {args.platform}...")
+        bw_urls = source_builtwith(args.platform)
+        candidates.extend(bw_urls)
+        # dedupe by netloc
+        seen = set()
+        deduped = []
+        for u in candidates:
+            netloc = urlparse(u).netloc.lower().replace("www.", "")
+            if netloc not in seen:
+                seen.add(netloc)
+                deduped.append(u)
+        candidates = deduped
+    # Step 2: detect platform, keep only matches
     print(f"\nDetecting platform for {len(candidates)} candidates (filtering for {args.platform})...")
     matched = []
     for i, url in enumerate(candidates, 1):
