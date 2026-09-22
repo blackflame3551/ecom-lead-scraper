@@ -1,0 +1,19 @@
+# Byte-compiled / cache
+__pycache__/
+*.pyc
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Output data — leads/results shouldn't be committed (privacy + they're regenerated each run)
+output/*.csv
+candidates.txt
+
+# OS junk
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
