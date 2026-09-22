@@ -18,9 +18,11 @@ from urllib.parse import urlparse
 
 from search_sourcing import run as run_search
 from builtwith_sourcing import source_platform as source_builtwith
+from directory_sourcing import source_platform as source_directory
 from detector import detect_platform
 from age_scorer import score_domain
 from contact_extractor import get_contacts
+from platform_config import get_config
 
 
 def load_lines(path):
@@ -29,19 +31,25 @@ def load_lines(path):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Full Wix lead-gen pipeline.")
-    parser.add_argument("--queries", required=True, help="Path to seed queries file")
+    parser = argparse.ArgumentParser(description="Full multi-platform lead-gen pipeline.")
+    parser.add_argument("--queries", help="Path to seed queries file (auto-picked from --platform if omitted)")
     parser.add_argument("--candidates-out", default="output/candidates.txt")
-    parser.add_argument("--out", default="output/leads.csv")
+    parser.add_argument("--out", help="Output CSV path (defaults to output/leads_<platform>.csv)")
     parser.add_argument("--platform", default="Wix",
                          help="Platform to filter for (Wix, Shopify, WooCommerce, WordPress, PrestaShop, BigCommerce)")
     parser.add_argument("--no-builtwith", action="store_true",
                          help="Skip BuiltWith's free list as an extra candidate source")
     args = parser.parse_args()
 
+    # Platform config is the single source of truth — this guarantees Shopify
+    # never touches Wix's queries file or Wix's BuiltWith list, and vice versa.
+    config = get_config(args.platform)
+    queries_path = args.queries or config["queries_file"]
+    out_path = args.out or f"output/leads_{args.platform}.csv"
+
     # Step 1: source candidate URLs — search engines + BuiltWith's free sample list
-    queries = load_lines(args.queries)
-    print(f"Sourcing candidates from {len(queries)} queries...")
+    queries = load_lines(queries_path)
+    print(f"Sourcing candidates from {len(queries)} queries ({queries_path})...")
     run_search(queries, args.candidates_out)
 
     candidates = load_lines(args.candidates_out)
@@ -50,15 +58,20 @@ def main():
         print(f"\nSourcing additional candidates from BuiltWith for {args.platform}...")
         bw_urls = source_builtwith(args.platform)
         candidates.extend(bw_urls)
-        # dedupe by netloc
-        seen = set()
-        deduped = []
-        for u in candidates:
-            netloc = urlparse(u).netloc.lower().replace("www.", "")
-            if netloc not in seen:
-                seen.add(netloc)
-                deduped.append(u)
-        candidates = deduped
+
+    print(f"\nSourcing additional candidates from known directories for {args.platform}...")
+    dir_urls = source_directory(args.platform)
+    candidates.extend(dir_urls)
+
+    # dedupe by netloc across all three sources
+    seen = set()
+    deduped = []
+    for u in candidates:
+        netloc = urlparse(u).netloc.lower().replace("www.", "")
+        if netloc not in seen:
+            seen.add(netloc)
+            deduped.append(u)
+    candidates = deduped
     # Step 2: detect platform, keep only matches
     print(f"\nDetecting platform for {len(candidates)} candidates (filtering for {args.platform})...")
     matched = []
@@ -91,7 +104,7 @@ def main():
 
     # Step 5: write final leads, NEW first
     scored.sort(key=lambda r: r["new_score"], reverse=True)
-    out_dir = os.path.dirname(args.out)
+    out_dir = os.path.dirname(out_path)
     if out_dir:
         os.makedirs(out_dir, exist_ok=True)
     fieldnames = [
@@ -99,13 +112,13 @@ def main():
         "wix_badge", "new_score", "classification",
         "emails", "phones", "instagram", "facebook", "tiktok",
     ]
-    with open(args.out, "w", newline="", encoding="utf-8") as f:
+    with open(out_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(scored)
 
     new_count = sum(1 for r in scored if r["classification"] == "NEW")
-    print(f"\nDone. {len(scored)} leads written to {args.out} ({new_count} NEW, {len(scored) - new_count} ESTABLISHED)")
+    print(f"\nDone. {len(scored)} leads written to {out_path} ({new_count} NEW, {len(scored) - new_count} ESTABLISHED)")
 
 
 if __name__ == "__main__":

@@ -45,10 +45,7 @@ jobs:
 
       - name: Run pipeline for ${{ matrix.platform }}
         if: github.event.inputs.platform == '' || github.event.inputs.platform == matrix.platform
-        run: |
-          platform="${{ matrix.platform }}"
-          queries_file="queries_$(echo "$platform" | tr '[:upper:]' '[:lower:]').txt"
-          python pipeline.py --platform "$platform" --queries "$queries_file" --out "output/leads_${platform}.csv"
+        run: python pipeline.py --platform "${{ matrix.platform }}"
 
       - name: Upload leads CSV
         if: github.event.inputs.platform == '' || github.event.inputs.platform == matrix.platform
