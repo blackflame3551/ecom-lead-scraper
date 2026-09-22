@@ -1,35 +1,59 @@
-name: Wix Lead Scraper
+name: Ecommerce Lead Scraper
 
 on:
   schedule:
     # Runs daily at 06:00 UTC. Adjust as you like (cron syntax, in UTC).
     - cron: "0 6 * * *"
   workflow_dispatch:
-    # Lets you trigger it manually from the Actions tab in GitHub, anytime.
+    inputs:
+      platform:
+        description: "Run for a single platform only (leave blank to run all)"
+        required: false
+        type: choice
+        options:
+          - ""
+          - Wix
+          - Shopify
+          - WooCommerce
+          - WordPress
+          - PrestaShop
+          - BigCommerce
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [Wix, Shopify, WooCommerce, WordPress, PrestaShop, BigCommerce]
 
     steps:
       - name: Check out repo
+        if: github.event.inputs.platform == '' || github.event.inputs.platform == matrix.platform
         uses: actions/checkout@v4
 
       - name: Set up Python
+        if: github.event.inputs.platform == '' || github.event.inputs.platform == matrix.platform
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
       - name: Install dependencies
+        if: github.event.inputs.platform == '' || github.event.inputs.platform == matrix.platform
         run: pip install -r requirements.txt
 
-      - name: Run pipeline
-        run: python pipeline.py --queries queries.txt --out output/leads.csv
+      - name: Run pipeline for ${{ matrix.platform }}
+        if: github.event.inputs.platform == '' || github.event.inputs.platform == matrix.platform
+        run: |
+          platform="${{ matrix.platform }}"
+          queries_file="queries_$(echo "$platform" | tr '[:upper:]' '[:lower:]').txt"
+          python pipeline.py --platform "$platform" --queries "$queries_file" --out "output/leads_${platform}.csv"
 
       - name: Upload leads CSV
+        if: github.event.inputs.platform == '' || github.event.inputs.platform == matrix.platform
         uses: actions/upload-artifact@v4
         with:
-          name: leads-${{ github.run_id }}
-          path: output/leads.csv
+          name: leads-${{ matrix.platform }}-${{ github.run_id }}
+          path: output/leads_${{ matrix.platform }}.csv
           retention-days: 30

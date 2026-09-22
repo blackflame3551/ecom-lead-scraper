@@ -1,0 +1,5 @@
+prestashop store jewelry
+prestashop store clothing
+prestashop store new launch
+"powered by prestashop" shop
+prestashop demo shop -demo
