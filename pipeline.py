@@ -13,6 +13,7 @@ Usage:
 
 import csv
 import argparse
+import os
 
 from search_sourcing import run as run_search
 from detector import detect_platform
@@ -72,6 +73,9 @@ def main():
 
     # Step 5: write final leads, NEW first
     scored.sort(key=lambda r: r["new_score"], reverse=True)
+    out_dir = os.path.dirname(args.out)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
     fieldnames = [
         "url", "domain_age_days", "wayback_age_days", "ssl_age_days",
         "wix_badge", "new_score", "classification",

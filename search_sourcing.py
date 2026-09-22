@@ -13,6 +13,7 @@ Usage:
 import re
 import time
 import argparse
+import os
 import requests
 from urllib.parse import urlparse, parse_qs, unquote
 
@@ -63,6 +64,17 @@ def search_duckduckgo(query: str, max_results: int = 30):
 
     # Result links carry class="result__a"
     hrefs = re.findall(r'class="result__a"[^>]*href="([^"]+)"', resp.text)
+
+    if not hrefs:
+        # Nothing matched — likely blocked/rate-limited rather than "no results".
+        # Print diagnostics so it's obvious which case we're in.
+        print(f"  [diag] status={resp.status_code} body_len={len(resp.text)}")
+        lowered = resp.text.lower()
+        if "anomaly" in lowered or "unusual traffic" in lowered or resp.status_code in (403, 429, 202):
+            print("  [diag] response looks like a block/rate-limit page, not a real 'no results' page")
+        elif len(resp.text) < 2000:
+            print(f"  [diag] short response body, first 300 chars: {resp.text[:300]!r}")
+
     for href in hrefs:
         real_url = extract_real_url(href)
         if real_url and not is_blocked(real_url):
@@ -94,6 +106,10 @@ def run(queries, out_path, delay=2.0, max_per_query=30):
         time.sleep(delay)
 
     all_urls = dedupe(all_urls)
+
+    out_dir = os.path.dirname(out_path)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
 
     with open(out_path, "w", encoding="utf-8") as f:
         for u in all_urls:

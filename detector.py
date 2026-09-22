@@ -14,6 +14,7 @@ import csv
 import sys
 import time
 import argparse
+import os
 import requests
 
 USER_AGENT = (
@@ -136,6 +137,9 @@ def detect_platform(url: str) -> dict:
 
 
 def run_batch(urls, out_path, delay=1.0):
+    out_dir = os.path.dirname(out_path)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
     fieldnames = ["url", "platform", "status", "error"]
     with open(out_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)

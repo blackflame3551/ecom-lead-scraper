@@ -18,6 +18,7 @@ import re
 import csv
 import time
 import argparse
+import os
 import requests
 from urllib.parse import urljoin, urlparse
 
@@ -128,6 +129,9 @@ def get_contacts(url: str) -> dict:
 
 
 def run(urls, out_path, delay=1.5):
+    out_dir = os.path.dirname(out_path)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
     fieldnames = ["url", "emails", "phones", "instagram", "facebook", "tiktok", "contact_page_found"]
     with open(out_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)

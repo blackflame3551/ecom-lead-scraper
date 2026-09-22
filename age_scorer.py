@@ -16,6 +16,7 @@ import socket
 import argparse
 import csv
 import time
+import os
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
@@ -142,6 +143,9 @@ def score_domain(url: str) -> dict:
 
 
 def run(urls, out_path, delay=1.0):
+    out_dir = os.path.dirname(out_path)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
     fieldnames = [
         "url", "domain_age_days", "wayback_age_days", "ssl_age_days",
         "wix_badge", "new_score", "classification",
